@@ -41,7 +41,7 @@ public class DishController {
         return Result.success();
     }
 
-    	/**
+    /**
      * 菜品分页查询
      *
      * @param dishPageQueryDTO
@@ -53,5 +53,19 @@ public class DishController {
         log.info("菜品分页查询:{}", dishPageQueryDTO);
         PageResult pageResult = dishService.pageQuery(dishPageQueryDTO);//后绪步骤定义
         return Result.success(pageResult);
+    }
+
+    /**
+     * 菜品批量删除
+     *
+     * @param ids
+     * @return
+     */
+    @DeleteMapping
+    @ApiOperation("菜品批量删除")
+    public Result delete(@RequestParam List<Long> ids) {
+        log.info("菜品批量删除：{}", ids);
+        dishService.deleteBatch(ids);//后绪步骤实现
+        return Result.success();
     }
 }
