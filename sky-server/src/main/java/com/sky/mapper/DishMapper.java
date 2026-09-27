@@ -66,4 +66,18 @@ public interface DishMapper {
     @AutoFill(value = OperationType.UPDATE)
     void update(Dish dish);
 
+    /**
+     * 动态条件查询菜品
+     * @param dish
+     * @return
+    */
+    List<Dish> list(Dish dish);
+
+    /**
+     * 查询套餐关联的菜品，用于套餐起售校验
+     * @param setmealId
+     * @return
+     */
+    List<Dish> getBySetmealId(Long setmealId);
+
 }
