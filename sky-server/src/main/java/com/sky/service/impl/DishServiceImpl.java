@@ -9,9 +9,11 @@ import com.sky.dto.DishDTO;
 import com.sky.dto.DishPageQueryDTO;
 import com.sky.entity.Dish;
 import com.sky.entity.DishFlavor;
+import com.sky.entity.Setmeal;
 import com.sky.exception.DeletionNotAllowedException;
 import com.sky.mapper.DishFlavorMapper;
 import com.sky.mapper.DishMapper;
+import com.sky.mapper.SetmealMapper;
 import com.sky.result.PageResult;
 import com.sky.mapper.SetmealDishMapper;
 
@@ -21,6 +23,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import lombok.extern.slf4j.Slf4j;
+import java.util.ArrayList;
 import java.util.List;
 import com.sky.service.DishService;
 import com.sky.vo.DishVO;
@@ -34,6 +37,8 @@ public class DishServiceImpl implements DishService {
     private DishMapper dishMapper;
     @Autowired
     private DishFlavorMapper dishFlavorMapper;
+    @Autowired
+    private SetmealMapper setmealMapper;
 
     /**
      * 新增菜品和对应的口味
@@ -155,6 +160,34 @@ public class DishServiceImpl implements DishService {
     }
 
     /**
+     * 菜品起售、停售。停售菜品时，同时停售包含该菜品的套餐。
+     */
+    @Override
+    @Transactional
+    public void startOrStop(Integer status, Long id) {
+        Dish dish = Dish.builder()
+                .id(id)
+                .status(status)
+                .build();
+        dishMapper.update(dish);
+
+        if (StatusConstant.DISABLE.equals(status)) {
+            List<Long> dishIds = new ArrayList<>();
+            dishIds.add(id);
+            List<Long> setmealIds = setmealDishMapper.getSetmealIdsByDishIds(dishIds);
+            if (setmealIds != null) {
+                for (Long setmealId : setmealIds) {
+                    Setmeal setmeal = Setmeal.builder()
+                            .id(setmealId)
+                            .status(StatusConstant.DISABLE)
+                            .build();
+                    setmealMapper.update(setmeal);
+                }
+            }
+        }
+    }
+
+    /**
          * 根据分类id查询菜品
          * @param categoryId
          * @return
@@ -165,5 +198,23 @@ public class DishServiceImpl implements DishService {
             .status(StatusConstant.ENABLE)
             .build();
         return dishMapper.list(dish);
+    }
+
+    /**
+     * 根据条件查询菜品及其口味
+     */
+    @Override
+    public List<DishVO> listWithFlavor(Dish dish) {
+        List<Dish> dishList = dishMapper.list(dish);
+        List<DishVO> dishVOList = new ArrayList<>();
+
+        for (Dish item : dishList) {
+            DishVO dishVO = new DishVO();
+            BeanUtils.copyProperties(item, dishVO);
+            dishVO.setFlavors(dishFlavorMapper.getByDishId(item.getId()));
+            dishVOList.add(dishVO);
+        }
+
+        return dishVOList;
     }
 }
