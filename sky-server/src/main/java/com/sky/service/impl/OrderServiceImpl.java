@@ -1,5 +1,6 @@
 package com.sky.service.impl;
 
+import com.alibaba.fastjson.JSON;
 import com.github.pagehelper.Page;
 import com.github.pagehelper.PageHelper;
 import com.sky.constant.MessageConstant;
@@ -27,6 +28,7 @@ import com.sky.vo.OrderPaymentVO;
 import com.sky.vo.OrderStatisticsVO;
 import com.sky.vo.OrderSubmitVO;
 import com.sky.vo.OrderVO;
+import com.sky.websocket.WebSocketServer;
 import org.springframework.beans.BeanUtils;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
@@ -36,7 +38,9 @@ import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
@@ -54,6 +58,9 @@ public class OrderServiceImpl implements OrderService {
 
     @Autowired
     private AddressBookMapper addressBookMapper;
+
+    @Autowired
+    private WebSocketServer webSocketServer;
 
     @Override
     @Transactional
@@ -157,6 +164,9 @@ public class OrderServiceImpl implements OrderService {
                 .build();
         orderMapper.update(paidOrder);
 
+        // 本地模拟支付成功后，向所有已连接的管理端页面推送来单提醒。
+        sendOrderMessage(1, order);
+
         return OrderPaymentVO.builder()
                 .nonceStr("local-test")
                 .paySign("LOCAL_PAYMENT_SUCCESS")
@@ -247,6 +257,23 @@ public class OrderServiceImpl implements OrderService {
                 shoppingCartMapper.insert(cart);
             }
         }
+    }
+
+    @Override
+    public void reminder(Long id) {
+        Orders order = orderMapper.getByIdAndUserId(id, BaseContext.getCurrentId());
+        if (order == null) {
+            throw new OrderBusinessException(MessageConstant.ORDER_NOT_FOUND);
+        }
+
+        Integer status = order.getStatus();
+        if (!Orders.TO_BE_CONFIRMED.equals(status)
+                && !Orders.CONFIRMED.equals(status)
+                && !Orders.DELIVERY_IN_PROGRESS.equals(status)) {
+            throw new OrderBusinessException(MessageConstant.ORDER_STATUS_ERROR);
+        }
+
+        sendOrderMessage(2, order);
     }
 
     @Override
@@ -390,6 +417,14 @@ public class OrderServiceImpl implements OrderService {
 
     private String defaultReason(String reason, String defaultValue) {
         return reason == null || reason.trim().isEmpty() ? defaultValue : reason.trim();
+    }
+
+    private void sendOrderMessage(int type, Orders order) {
+        Map<String, Object> message = new LinkedHashMap<>();
+        message.put("type", type);
+        message.put("orderId", order.getId());
+        message.put("content", "订单号：" + order.getNumber());
+        webSocketServer.sendToAllClient(JSON.toJSONString(message));
     }
 
     private String buildFullAddress(AddressBook addressBook) {
